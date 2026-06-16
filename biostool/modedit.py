@@ -51,6 +51,41 @@ def ref_pattern(formset_guid, formid):
     return struct.pack("<HH", formid, 0) + uuid.UUID(formset_guid).bytes_le
 
 
+# FFS-файл OEM-логотипа (Raw-секция с BMP внутри GUID-defined LZMA-секции).
+OEM_LOGO_GUID = "63819805-67BB-46EF-AA8D-1524A19A01E4"
+
+
+def replace_oem_logo(img, new_bmp, file_guid=OEM_LOGO_GUID):
+    """Заменяет OEM-логотип БЕЗ извлечения старого: находит FFS-файл лого по GUID,
+    его LZMA-секцию (распаковка = raw-хедер + BMP), подменяет тело BMP на new_bmp
+    (размер должен совпасть) и пересобирает секцию in-place.
+
+    Возвращает (новый_образ, info). Бросает LookupError/ValueError при несоответствии.
+    """
+    fg = uuid.UUID(file_guid).bytes_le
+    pos = img.find(fg)
+    if pos < 0:
+        raise LookupError(f"FFS-файл лого {file_guid} в образе не найден")
+    # первая LZMA-секция после заголовка файла, чья распаковка = raw-секция с BMP
+    for sec in sorted((s for s in edk2.iter_sections(img) if s.offset > pos),
+                      key=lambda s: s.offset):
+        dec = edk2.decompress(img, sec)
+        if dec is None:
+            continue
+        i = 4 if (len(dec) > 6 and dec[3] == 0x19 and dec[4:6] == b"BM") else dec.find(b"BM")
+        if i < 0:
+            continue
+        old_bmp = dec[i:]
+        if len(new_bmp) != len(old_bmp):
+            raise ValueError(f"размер лого изменился {len(old_bmp)}->{len(new_bmp)}; "
+                             f"нужен BMP ровно {len(old_bmp)} Б (см. logo --budget)")
+        new_dec = dec[:i] + new_bmp
+        out, lc = edk2.repack_inplace(img, sec, new_dec)
+        return out, {"section": sec, "lc": lc, "bmp_len": len(new_bmp),
+                     "comp": len(edk2.compress(new_dec, lc=lc)), "cap": sec.capacity}
+    raise LookupError("LZMA-секция с BMP-логотипом в файле лого не найдена")
+
+
 def patch_string_inplace(data, old, new, encoding="utf-16-le"):
     """Перезаписывает строку old->new в data (UTF-16), дополняя пробелами до длины
     old (терминатор сохраняется на месте). Бросает, если new длиннее или old не уникален.
