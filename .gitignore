@@ -11,4 +11,6 @@ re/
 *.elf
 # transient capture/benchmark output
 *.bin
-pty_capture.bin
+bios
+.DS_Store
+__pycache__
