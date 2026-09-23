@@ -122,3 +122,22 @@
 .rd450x_status[data-state="error"] .rd450x_dot {
   background: #cc3333;
 }
+
+/* Extra keys drawer: the F1-F12 grid unfolds below its toggle, three keys a row,
+   and takes no space while folded. */
+#rd450x_fkeys {
+  display: none;
+  grid-template-columns: repeat(3, 36px); /* fixed, so the drawer widens to fit */
+  gap: 3px;
+  margin-top: 4px;
+}
+#rd450x_fkeys.rd450x_open {
+  display: grid;
+}
+#rd450x_fkeys input[type=button] {
+  min-width: 0;
+  width: 36px;
+  padding: 2px 4px;
+  margin: 0;
+  font-size: 12px;
+}
